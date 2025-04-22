@@ -2,15 +2,41 @@
 
 Arnau Pascual
 
+## Principis de Programació segura
+
+### Principi de menor privilegi
+
+Cada component, procés o usuari només ha de tenir els permisos mínims necessaris per fer la seva tasca.
+
+### Validació i sanejament d'entrada
+
+Tota entrada s'ha de validar i netejar per evitar injeccions, errors o abusos.
+
+### Principi de la mínima exposició
+
+No mostrar ni retornar més informació de la necessària.
+
+### Principi d'autenticació i autoritzaciós segura
+
+Verificar correctament la identitat i assegurar que cada acció només la pugui fer qui estigui autoritzat.
+
+### Anàlisis, proves i auditories de seguretat
+
+**Aquest no és un privilegi, però si una pràctica de seguretat recomanada.**
+
+Revisar i provar el codi per detectar vulnerablitats.
+
 ## Exercicis
 
 ### 1. Quina és la diferència entre un socket i un websocket? Quin dels dos pot ser més segur? Quines implementacions poden fer-lo més segur?
 
 Un socket és una connexió entre dos sistemes, una interfície bidireccional entre el client i el servidor mitjançant els protocols TCP i UDP.
 
-Un websocket és una connexió bidireccional i permanent entre el client i el servidor amb una única connexió TCP.
+Un websocket és una connexió bidireccional i persistents entre el client i el servidor amb una única connexió TCP, aquesta està pensada per a navgeadors i entorns web.
 
+Els websockets són més segurs, ja que per defecte utilitzen https.
 
+Per a fer els websockets més segurs, es pot autenticar l'usuari abans d'establir la connexió a més de posar l'imits de temps a la connexió.
 
 ### 2. Descriu els passos a realitzar amb SignalR un sistema per veure els valors de la borsa en temps real. No s’ha d’implementar.
 
@@ -245,3 +271,82 @@ En el codi app s'utilitza abans de que sigui declarat.
 Falta el **app.UseAuthorization();** en el codi.
 
 Falta el **Service.AddIndentity**.
+
+Per a l'exercici 3 s'haura de afegir la configuració de l'autenticació, l'inicialització dels rols i configurar l'autorització, afegir el DbContext, els controladors.
+
+```
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddSwaggerGen();
+
+builder.Services.AddControllers();
+
+builder.Services.AddEndpointsApiExplorer();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options => {
+        // config jwt aquí
+    });
+
+builder.Services.AddAuthorization(options => {
+    options.AddPolicy("SubscriptorOnly", p => p.RequireRole("Subscriptor"));
+    options.AddPolicy("PeriodistaOnly", p => p.RequireRole("Periodista"));
+    options.AddPolicy("EditorOnly", p => p.RequireRole("Editor"));
+});
+
+builder.Services.AddDbContext<AppDbContext>(...);
+builder.Services.AddControllers();
+
+var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+
+```
+
+### 7. Determina si el següent codi té errors i si compleix els principis de programació segura. En cas de no fer-ho raona el motiu i quin principi ha vulnerat:
+
+```
+[HttpPost("login")]
+public async Task<IActionResult> Login([FromBody] UserIdentity user)
+{
+	//Certifiquem que el mail existeix
+	var usuari = await _userManager.FindByEmailAsync(user.Email);
+	if (usuari == null)
+		return Ok(“Error”);
+
+	var claims = new List<Claim>()
+	{
+		new Claim(ClaimTypes.Name, usuari.UserName),
+		new Claim(ClaimTypes.NameIdentifier, usuari.Id.ToString())
+	};
+
+	_logger.Information(“Usuari {usuari.UserName} amb id {usuari.Id.ToString()} i password {usuari.password} ha fet logging amb éxit!”);
+
+	var token = CreateToken(claims.ToArray());
+	return Ok(usuari);
+}
+```
+
+El mètode rep un user, que conté tota l'informació de l'usuari a iniciar sessió, tota aquesta informació no és necessaria per a fer login, només és necessita un identificador, com el correu, i una contrasenya.
+
+Si no troba l'usuari el mètode retorna un Ok, quan hauria de rotornar un NotFound, ja que no ha trobat l'usuari. Això vulnera el principi de **Principi de la mínima exposició**.
+
+Si troba l'usuari el mètode no comprova si la contrasenya d'aquest és correcte, així que no comprova l'identitat del usuari correctament, només comprova que aquest es trobi en la base de dades. Això vulnera el principi de **Autenticació i autorització segura**.
+
+El logger registra tota la informació del usuari, tant el id que té, com la seva contrasenya, aquests dos són completament inecessaris, sobre tot la contrasenya. Això vulnera el principi de **Principi de la mínima exposició**.
+
+Al acabar el mètode aquest retorna l'usuari, i amb això tota la seva informació, això no és corrececte. Això vulnera el principi de **Principi del menor privilegi i mínima exposició**.
+
+Si el que rep el mètode no ha estat validat anteriorment també vulnera el princpi de **Validació i sanejament d'entrada**.
